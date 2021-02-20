@@ -1,16 +1,15 @@
 package push_sdk
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/http"
+	http2 "push-sdk/http"
 )
 
-type PushMessageRequest struct {
+type XiaoMiMessageRequest struct {
 	Payload               string `json:"payload"`                 // 消息的内容。（注意：需要对payload字符串做urlencode处理）
 	RestrictedPackageName string `json:"restricted_package_name"` // App的包名
 	PassThrough           int    `json:"pass_through"`            // 0 表示通知栏消息,1 表示透传消息
@@ -20,12 +19,7 @@ type PushMessageRequest struct {
 	Extra                 *Extra `json:"extra"`
 }
 
-type Extra struct {
-	NotifyEffect string `json:"extra.notify_effect"` // 预定义通知栏消息的点击行为
-	IntentUri    string `json:"extra.intent_uri"`
-}
-
-type PushMessageResponse struct {
+type XiaoMiMessageResponse struct {
 	Result      string            `json:"result"`      // "ok" 表示成功
 	Description string            `json:"description"` // 对发送消息失败原因的解释
 	Data        map[string]string `json:"data"`        // 本身就是一个json字符串（其中id字段的值就是消息的Id）
@@ -34,23 +28,25 @@ type PushMessageResponse struct {
 	Reason      string            `json:"reason"`      // 错误原因
 }
 
-type client struct {
-	mi XiaoMi
+type XiaoMiClient struct {
+	Mi     XiaoMi
+	client *http2.HTTPClient
 }
 
-func NewXiaoMiClient(mi XiaoMi) (*client, error) {
+func NewXiaoMiClient(mi XiaoMi) (*XiaoMiClient, error) {
 	if mi.AppPkgName == "" {
 		return nil, errors.New("app pkg-name empty")
 	}
 	if mi.AppSecret == "" {
 		return nil, errors.New("app secret empty")
 	}
-	return &client{
-		mi: mi,
+	return &XiaoMiClient{
+		Mi:     mi,
+		client: http2.NewHTTPClient(),
 	}, nil
 }
 
-func (c *client) Notify(ctx context.Context, body MessageRequest) (MessageResponse, error) {
+func (c *XiaoMiClient) Notify(ctx context.Context, body MessageRequest) (MessageResponse, error) {
 	if e := body.Validate(); e != nil {
 		return nil, e
 	}
@@ -59,33 +55,30 @@ func (c *client) Notify(ctx context.Context, body MessageRequest) (MessageRespon
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, c.mi.PushURL, bytes.NewReader(data))
+	resp, err := c.client.Do(ctx, &http2.PushRequest{
+		Method: http.MethodPost,
+		URL:    c.Mi.PushURL,
+		Body:   data,
+		Header: []http2.HTTPOption{
+			http2.SetHeader("Authorization", fmt.Sprintf("key=%s", c.Mi.AppSecret)),
+			http2.SetHeader("Content-Type", "application/x-www-form-urlencoded"),
+		},
+	})
 	if err != nil {
 		return nil, err
 	}
-
-	request := req.WithContext(ctx)
-	request.Header.Set("Authorization", fmt.Sprintf("key=%s", c.mi.AppSecret))
-	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := http.DefaultClient.Do(request)
-	if err != nil {
-		return nil, err
+	if resp.Status == 200 {
+		var r XiaoMiMessageResponse
+		err = json.Unmarshal(resp.Body, &r)
+		if err != nil {
+			return nil, err
+		}
+		return &r, nil
 	}
-	defer resp.Body.Close()
-	response, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	var r PushMessageResponse
-	err = json.Unmarshal(response, &r)
-	if err != nil {
-		return nil, err
-	}
-	return &r, nil
+	return nil, errors.New(fmt.Sprintf("response status %v %s", resp.Status, string(resp.Body)))
 }
 
-func (p *PushMessageRequest) Validate() error {
+func (p *XiaoMiMessageRequest) Validate() error {
 	if p.Title == "" {
 		return errors.New("message title is empty")
 	}
@@ -102,10 +95,10 @@ func (p *PushMessageRequest) Validate() error {
 	return nil
 }
 
-func (p *PushMessageResponse) GetResult() string {
+func (p *XiaoMiMessageResponse) GetResult() string {
 	return p.Result
 }
 
-func (p *PushMessageResponse) GetData() map[string]string {
+func (p *XiaoMiMessageResponse) GetData() map[string]string {
 	return p.Data
 }

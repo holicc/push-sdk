@@ -32,6 +32,11 @@ type Message struct {
 	CallbackParam string            `json:"callbackParam"` // 自定义回执参数
 }
 
+type Extra struct {
+	NotifyEffect string `json:"extra.notify_effect"` // 预定义通知栏消息的点击行为
+	IntentUri    string `json:"extra.intent_uri"`
+}
+
 type Platform struct {
 	PushURL string
 	AuthURL string
@@ -56,6 +61,7 @@ type Oppo struct {
 }
 
 type Vivo struct {
+	Platform
 	AppPkgName string `json:"appPkgName"`
 	AppId      string `json:"appId"`
 	AppKey     string `json:"appKey"`
