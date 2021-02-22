@@ -1,4 +1,4 @@
-package push_sdk
+package vivo
 
 import (
 	"context"
@@ -7,13 +7,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"push-sdk"
 	"push-sdk/http"
 	"strconv"
 	"strings"
 	"time"
 )
 
-type VivoMessageRequest struct {
+type MessageRequest struct {
 	RegId       string             `json:"regId"`
 	Title       string             `json:"title"`
 	Content     string             `json:"content"`
@@ -24,7 +25,7 @@ type VivoMessageRequest struct {
 	Extra       *SingleNotifyExtra `json:"extra,omitempty"`
 }
 
-type VivoMessageResponse struct {
+type MessageResponse struct {
 	Result       int         `json:"result"`    // 0 表示成功，非0失败
 	Desc         string      `json:"desc"`      // 文字描述接口调用情况
 	RequestId    string      `json:"requestId"` // 请求ID
@@ -37,6 +38,16 @@ type SingleNotifyExtra struct {
 	CallBackParam string `json:"callback.param,omitempty"`
 }
 
+type TokenInfo struct {
+	AppId     string
+	AppKey    string
+	AppSecret string
+	AuthURL   string
+
+	Token      string
+	CreateTime time.Time
+}
+
 type AuthTokenReq struct {
 	AppId     string `json:"appId"`
 	AppKey    string `json:"appKey"`
@@ -45,19 +56,19 @@ type AuthTokenReq struct {
 }
 
 type AuthTokenResp struct {
-	Result    int       `json:"result"`    // 0 成功，非0失败
-	Desc      string    `json:"desc"`      // 文字描述接口调用情况
-	AuthToken string    `json:"authToken"` // 默认有效一天
-	Time      time.Time `json:"-"`
+	Result    int    `json:"result"`    // 0 成功，非0失败
+	Desc      string `json:"desc"`      // 文字描述接口调用情况
+	AuthToken string `json:"authToken"` // 默认有效一天
 }
 
-type VivoClient struct {
-	Vivo   Vivo
-	Token  *AuthTokenResp
+type client struct {
+	vi     push_sdk.Vivo
 	client *http.HTTPClient
+
+	authClient *http.AuthClient
 }
 
-func NewVivoClient(vi Vivo) (*VivoClient, error) {
+func NewClient(vi push_sdk.Vivo) (*client, error) {
 	if vi.AppPkgName == "" {
 		return nil, errors.New("app pkg-name empty")
 	}
@@ -71,75 +82,36 @@ func NewVivoClient(vi Vivo) (*VivoClient, error) {
 		return nil, errors.New("app secret empty")
 	}
 
-	client := http.NewHTTPClient()
-
-	return &VivoClient{
-		Vivo:   vi,
-		client: client,
+	return &client{
+		vi:     vi,
+		client: http.NewHTTPClient(),
+		authClient: http.NewAuthClient(&TokenInfo{
+			AppId:     vi.AppId,
+			AppKey:    vi.AppKey,
+			AppSecret: vi.AppSecret,
+			AuthURL:   vi.AuthURL,
+		}),
 	}, nil
 }
 
-func getAccessToken(vi Vivo, client *http.HTTPClient) (*AuthTokenResp, error) {
-	timestamp := strconv.FormatInt(time.Now().UTC().UnixNano()/(1e6), 10)
-	authReq := &AuthTokenReq{
-		AppId:     vi.AppId,
-		AppKey:    vi.AppKey,
-		Timestamp: timestamp,
-		Sign:      generateSign(vi.AppId, vi.AppKey, timestamp, vi.AppSecret),
-	}
-
-	data, err := json.Marshal(authReq)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := client.Do(context.Background(), &http.PushRequest{
-		Method: "POST",
-		URL:    vi.AuthURL,
-		Body:   data,
-		Header: nil,
-	})
-	if err != nil {
-		return nil, err
-	}
-	if resp.Status != 200 {
-		return nil, errors.New("request access token failed")
-	}
-
-	var token AuthTokenResp
-	err = json.Unmarshal(resp.Body, &token)
-	if err != nil {
-		return nil, err
-	}
-	if token.Result != 0 {
-		return nil, errors.New("get access token failed")
-	}
-
-	token.Time = time.Now()
-	return &token, nil
-}
-
-func (v *VivoClient) Notify(ctx context.Context, req MessageRequest) (MessageResponse, error) {
+func (v *client) Notify(ctx context.Context, req push_sdk.MessageRequest) (push_sdk.MessageResponse, error) {
 	data, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
 	}
 
-	if v.Token == nil || !v.Token.isValid() {
-		token, err := getAccessToken(v.Vivo, v.client)
-		if err != nil {
-			return nil, err
-		}
-		v.Token = token
+	token, err := v.authClient.GetAuthToken(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	resp, err := v.client.Do(ctx, &http.PushRequest{
 		Method: "POST",
-		URL:    v.Vivo.PushURL,
+		URL:    v.vi.PushURL,
 		Body:   data,
 		Header: []http.HTTPOption{
 			http.SetHeader("Content-Type", "application/json"),
-			http.SetHeader("authToken", v.Token.AuthToken),
+			http.SetHeader("authToken", token),
 		},
 	})
 	if err != nil {
@@ -149,7 +121,7 @@ func (v *VivoClient) Notify(ctx context.Context, req MessageRequest) (MessageRes
 		return nil, errors.New(fmt.Sprintf("notify request failed %s", string(resp.Body)))
 	}
 
-	var r VivoMessageResponse
+	var r MessageResponse
 	err = json.Unmarshal(resp.Body, &r)
 	if err != nil {
 		return nil, err
@@ -158,7 +130,7 @@ func (v *VivoClient) Notify(ctx context.Context, req MessageRequest) (MessageRes
 	return &r, nil
 }
 
-func (v *VivoMessageRequest) Validate() error {
+func (v *MessageRequest) Validate() error {
 	if v.RegId == "" {
 		return errors.New("reg id empty")
 	}
@@ -169,16 +141,65 @@ func (v *VivoMessageRequest) Validate() error {
 	return nil
 }
 
-func (v *VivoMessageResponse) GetResult() string {
+func (v *MessageResponse) GetResult() string {
 	return v.Desc
 }
 
-func (v *VivoMessageResponse) GetData() map[string]string {
+func (v *MessageResponse) GetData() map[string]string {
 	return nil
 }
 
-func (r *AuthTokenResp) isValid() bool {
-	return time.Now().Sub(r.Time).Hours() < 24.0
+func (t *TokenInfo) TokenRequest() ([]byte, error) {
+	t.CreateTime = time.Now()
+	timestamp := strconv.FormatInt(t.CreateTime.UTC().UnixNano()/(1e6), 10)
+	authReq := &AuthTokenReq{
+		AppId:     t.AppId,
+		AppKey:    t.AppKey,
+		Timestamp: timestamp,
+		Sign:      generateSign(t.AppId, t.AppKey, timestamp, t.AppSecret),
+	}
+
+	data, err := json.Marshal(authReq)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+func (t *TokenInfo) ParseResponse(data []byte) error {
+	var token AuthTokenResp
+	err := json.Unmarshal(data, &token)
+	if err != nil {
+		return err
+	}
+	if token.Result != 0 {
+		return errors.New("get access token failed")
+	}
+	t.Token = token.AuthToken
+
+	return nil
+}
+
+func (t *TokenInfo) SetHeader() []http.HTTPOption {
+	return []http.HTTPOption{
+		http.SetHeader("Content-Type", "application/json"),
+	}
+}
+
+func (t *TokenInfo) GetAuthUrl() string {
+	return t.AuthURL
+}
+
+func (t *TokenInfo) GetAuthMethod() string {
+	return "POST"
+}
+
+func (t *TokenInfo) GetAccessToken() string {
+	return t.Token
+}
+
+func (t *TokenInfo) IsValidate() bool {
+	return time.Now().Sub(t.CreateTime).Hours() < 24.0
 }
 
 func generateSign(appId, appKey, timestamp, sec string) string {

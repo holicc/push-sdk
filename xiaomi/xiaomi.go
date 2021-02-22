@@ -1,4 +1,4 @@
-package push_sdk
+package xiaomi
 
 import (
 	"context"
@@ -6,17 +6,18 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"push-sdk"
 	http2 "push-sdk/http"
 )
 
 type XiaoMiMessageRequest struct {
-	Payload               string `json:"payload"`                 // 消息的内容。（注意：需要对payload字符串做urlencode处理）
-	RestrictedPackageName string `json:"restricted_package_name"` // App的包名
-	PassThrough           int    `json:"pass_through"`            // 0 表示通知栏消息,1 表示透传消息
-	Title                 string `json:"title"`                   // 通知栏展示的通知的标题
-	Description           string `json:"description"`             // 通知栏展示的通知的描述
-	RegistrationId        string `json:"registration_id"`         // 根据registration_id，发送消息到指定设备上
-	Extra                 *Extra `json:"extra"`
+	Payload               string          `json:"payload"`                 // 消息的内容。（注意：需要对payload字符串做urlencode处理）
+	RestrictedPackageName string          `json:"restricted_package_name"` // App的包名
+	PassThrough           int             `json:"pass_through"`            // 0 表示通知栏消息,1 表示透传消息
+	Title                 string          `json:"title"`                   // 通知栏展示的通知的标题
+	Description           string          `json:"description"`             // 通知栏展示的通知的描述
+	RegistrationId        string          `json:"registration_id"`         // 根据registration_id，发送消息到指定设备上
+	Extra                 *push_sdk.Extra `json:"extra"`
 }
 
 type XiaoMiMessageResponse struct {
@@ -29,11 +30,11 @@ type XiaoMiMessageResponse struct {
 }
 
 type XiaoMiClient struct {
-	Mi     XiaoMi
+	Mi     push_sdk.XiaoMi
 	client *http2.HTTPClient
 }
 
-func NewXiaoMiClient(mi XiaoMi) (*XiaoMiClient, error) {
+func NewXiaoMiClient(mi push_sdk.XiaoMi) (*XiaoMiClient, error) {
 	if mi.AppPkgName == "" {
 		return nil, errors.New("app pkg-name empty")
 	}
@@ -46,7 +47,7 @@ func NewXiaoMiClient(mi XiaoMi) (*XiaoMiClient, error) {
 	}, nil
 }
 
-func (c *XiaoMiClient) Notify(ctx context.Context, body MessageRequest) (MessageResponse, error) {
+func (c *XiaoMiClient) Notify(ctx context.Context, body push_sdk.MessageRequest) (push_sdk.MessageResponse, error) {
 	if e := body.Validate(); e != nil {
 		return nil, e
 	}

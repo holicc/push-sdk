@@ -55,6 +55,7 @@ type MeiZu struct {
 }
 
 type Oppo struct {
+	Platform
 	AppPkgName   string `json:"appPkgName"`
 	AppKey       string `json:"appKey"`
 	MasterSecret string `json:"masterSecret"`

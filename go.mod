@@ -1,1 +1,3 @@
-module "push-sdk"
+module push-sdk
+
+go 1.14
