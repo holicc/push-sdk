@@ -5,18 +5,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"push-sdk"
-	"push-sdk/http"
+	sdk "github.com/holicc/push-sdk"
+	"github.com/holicc/push-sdk/http"
 )
 
 type MessageRequest struct {
-	Payload               string          `json:"payload"`                 // 消息的内容。（注意：需要对payload字符串做urlencode处理）
-	RestrictedPackageName string          `json:"restricted_package_name"` // App的包名
-	PassThrough           int             `json:"pass_through"`            // 0 表示通知栏消息,1 表示透传消息
-	Title                 string          `json:"title"`                   // 通知栏展示的通知的标题
-	Description           string          `json:"description"`             // 通知栏展示的通知的描述
-	RegistrationId        string          `json:"registration_id"`         // 根据registration_id，发送消息到指定设备上
-	Extra                 *push_sdk.Extra `json:"extra"`
+	Payload               string     `json:"payload"`                 // 消息的内容。（注意：需要对payload字符串做urlencode处理）
+	RestrictedPackageName string     `json:"restricted_package_name"` // App的包名
+	PassThrough           int        `json:"pass_through"`            // 0 表示通知栏消息,1 表示透传消息
+	Title                 string     `json:"title"`                   // 通知栏展示的通知的标题
+	Description           string     `json:"description"`             // 通知栏展示的通知的描述
+	RegistrationId        string     `json:"registration_id"`         // 根据registration_id，发送消息到指定设备上
+	Extra                 *sdk.Extra `json:"extra"`
 }
 
 type MessageResponse struct {
@@ -29,11 +29,11 @@ type MessageResponse struct {
 }
 
 type client struct {
-	Mi     push_sdk.XiaoMi
+	Mi     sdk.XiaoMi
 	client *http.HTTPClient
 }
 
-func NewXiaoMiClient(mi push_sdk.XiaoMi) (*client, error) {
+func NewXiaoMiClient(mi sdk.XiaoMi) (*client, error) {
 	if mi.AppPkgName == "" {
 		return nil, errors.New("app pkg-name empty")
 	}
@@ -46,7 +46,7 @@ func NewXiaoMiClient(mi push_sdk.XiaoMi) (*client, error) {
 	}, nil
 }
 
-func (c *client) Notify(ctx context.Context, body push_sdk.MessageRequest) (push_sdk.MessageResponse, error) {
+func (c *client) Notify(ctx context.Context, body sdk.MessageRequest) (sdk.MessageResponse, error) {
 	if e := body.Validate(); e != nil {
 		return nil, e
 	}

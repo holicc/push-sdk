@@ -7,9 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	sdk "github.com/holicc/push-sdk"
+	"github.com/holicc/push-sdk/http"
 	"net/url"
-	"push-sdk"
-	"push-sdk/http"
 	"strconv"
 	"strings"
 	"time"
@@ -71,10 +71,10 @@ type client struct {
 	httpclient *http.HTTPClient
 	authClient *http.AuthClient
 
-	op push_sdk.Oppo
+	op sdk.Oppo
 }
 
-func NewOppoClient(op push_sdk.Oppo) (*client, error) {
+func NewOppoClient(op sdk.Oppo) (*client, error) {
 	if op.AppPkgName == "" {
 		return nil, errors.New("app pkg-name empty")
 	}
@@ -96,7 +96,7 @@ func NewOppoClient(op push_sdk.Oppo) (*client, error) {
 	}, nil
 }
 
-func (o *client) Notify(ctx context.Context, req push_sdk.MessageRequest) (push_sdk.MessageResponse, error) {
+func (o *client) Notify(ctx context.Context, req sdk.MessageRequest) (sdk.MessageResponse, error) {
 	err := req.Validate()
 	if err != nil {
 		return nil, err

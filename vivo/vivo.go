@@ -7,8 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"push-sdk"
-	"push-sdk/http"
+	sdk "github.com/holicc/push-sdk"
+	"github.com/holicc/push-sdk/http"
 	"strconv"
 	"strings"
 	"time"
@@ -62,13 +62,13 @@ type AuthTokenResp struct {
 }
 
 type client struct {
-	vi     push_sdk.Vivo
+	vi     sdk.Vivo
 	client *http.HTTPClient
 
 	authClient *http.AuthClient
 }
 
-func NewClient(vi push_sdk.Vivo) (*client, error) {
+func NewClient(vi sdk.Vivo) (*client, error) {
 	if vi.AppPkgName == "" {
 		return nil, errors.New("app pkg-name empty")
 	}
@@ -94,7 +94,7 @@ func NewClient(vi push_sdk.Vivo) (*client, error) {
 	}, nil
 }
 
-func (v *client) Notify(ctx context.Context, req push_sdk.MessageRequest) (push_sdk.MessageResponse, error) {
+func (v *client) Notify(ctx context.Context, req sdk.MessageRequest) (sdk.MessageResponse, error) {
 	data, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
