@@ -1,3 +1,3 @@
-module github.com/holicc/push-sdk
+module push-sdk
 
 go 1.14

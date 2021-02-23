@@ -5,12 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"push-sdk"
-	http2 "push-sdk/http"
+	"push-sdk/http"
 )
 
-type XiaoMiMessageRequest struct {
+type MessageRequest struct {
 	Payload               string          `json:"payload"`                 // 消息的内容。（注意：需要对payload字符串做urlencode处理）
 	RestrictedPackageName string          `json:"restricted_package_name"` // App的包名
 	PassThrough           int             `json:"pass_through"`            // 0 表示通知栏消息,1 表示透传消息
@@ -20,7 +19,7 @@ type XiaoMiMessageRequest struct {
 	Extra                 *push_sdk.Extra `json:"extra"`
 }
 
-type XiaoMiMessageResponse struct {
+type MessageResponse struct {
 	Result      string            `json:"result"`      // "ok" 表示成功
 	Description string            `json:"description"` // 对发送消息失败原因的解释
 	Data        map[string]string `json:"data"`        // 本身就是一个json字符串（其中id字段的值就是消息的Id）
@@ -29,25 +28,25 @@ type XiaoMiMessageResponse struct {
 	Reason      string            `json:"reason"`      // 错误原因
 }
 
-type XiaoMiClient struct {
+type client struct {
 	Mi     push_sdk.XiaoMi
-	client *http2.HTTPClient
+	client *http.HTTPClient
 }
 
-func NewXiaoMiClient(mi push_sdk.XiaoMi) (*XiaoMiClient, error) {
+func NewXiaoMiClient(mi push_sdk.XiaoMi) (*client, error) {
 	if mi.AppPkgName == "" {
 		return nil, errors.New("app pkg-name empty")
 	}
 	if mi.AppSecret == "" {
 		return nil, errors.New("app secret empty")
 	}
-	return &XiaoMiClient{
+	return &client{
 		Mi:     mi,
-		client: http2.NewHTTPClient(),
+		client: http.NewHTTPClient(),
 	}, nil
 }
 
-func (c *XiaoMiClient) Notify(ctx context.Context, body push_sdk.MessageRequest) (push_sdk.MessageResponse, error) {
+func (c *client) Notify(ctx context.Context, body push_sdk.MessageRequest) (push_sdk.MessageResponse, error) {
 	if e := body.Validate(); e != nil {
 		return nil, e
 	}
@@ -56,20 +55,20 @@ func (c *XiaoMiClient) Notify(ctx context.Context, body push_sdk.MessageRequest)
 		return nil, err
 	}
 
-	resp, err := c.client.Do(ctx, &http2.PushRequest{
-		Method: http.MethodPost,
+	resp, err := c.client.Do(ctx, &http.PushRequest{
+		Method: "POST",
 		URL:    c.Mi.PushURL,
 		Body:   data,
-		Header: []http2.HTTPOption{
-			http2.SetHeader("Authorization", fmt.Sprintf("key=%s", c.Mi.AppSecret)),
-			http2.SetHeader("Content-Type", "application/x-www-form-urlencoded"),
+		Header: []http.HTTPOption{
+			http.SetHeader("Authorization", fmt.Sprintf("key=%s", c.Mi.AppSecret)),
+			http.SetHeader("Content-Type", "application/x-www-form-urlencoded"),
 		},
 	})
 	if err != nil {
 		return nil, err
 	}
 	if resp.Status == 200 {
-		var r XiaoMiMessageResponse
+		var r MessageResponse
 		err = json.Unmarshal(resp.Body, &r)
 		if err != nil {
 			return nil, err
@@ -79,7 +78,7 @@ func (c *XiaoMiClient) Notify(ctx context.Context, body push_sdk.MessageRequest)
 	return nil, errors.New(fmt.Sprintf("response status %v %s", resp.Status, string(resp.Body)))
 }
 
-func (p *XiaoMiMessageRequest) Validate() error {
+func (p *MessageRequest) Validate() error {
 	if p.Title == "" {
 		return errors.New("message title is empty")
 	}
@@ -96,10 +95,10 @@ func (p *XiaoMiMessageRequest) Validate() error {
 	return nil
 }
 
-func (p *XiaoMiMessageResponse) GetResult() string {
+func (p *MessageResponse) GetResult() string {
 	return p.Result
 }
 
-func (p *XiaoMiMessageResponse) GetData() map[string]string {
+func (p *MessageResponse) GetData() map[string]string {
 	return p.Data
 }
