@@ -4,6 +4,7 @@ import "context"
 
 type MessageRequest interface {
 	Validate() error
+	GetRequestBody() ([]byte, error)
 }
 
 type MessageResponse interface {
