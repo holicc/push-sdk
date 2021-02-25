@@ -15,14 +15,16 @@ import (
 )
 
 type MessageRequest struct {
-	RegId       string             `json:"regId"`
-	Title       string             `json:"title"`
-	Content     string             `json:"content"`
-	SkipType    int                `json:"skipType"`
-	SkipContent string             `json:"skipContent"`
-	RequestId   string             `json:"requestId"`
-	NotifyType  int                `json:"notifyType"`
-	Extra       *SingleNotifyExtra `json:"extra,omitempty"`
+	RegId           string                 `json:"regId"`
+	Title           string                 `json:"title"`
+	Content         string                 `json:"content"`
+	SkipType        int                    `json:"skipType"`
+	SkipContent     string                 `json:"skipContent"`
+	RequestId       string                 `json:"requestId"`
+	NotifyType      int                    `json:"notifyType"`
+	PushMode        int                    `json:"pushMode"`
+	ClientCustomMap map[string]interface{} `json:"clientCustomMap"`
+	Extra           *SingleNotifyExtra     `json:"extra,omitempty"`
 }
 
 type MessageResponse struct {
@@ -68,10 +70,7 @@ type client struct {
 	authClient *http.AuthClient
 }
 
-func NewClient(vi sdk.Vivo) (*client, error) {
-	if vi.AppPkgName == "" {
-		return nil, errors.New("app pkg-name empty")
-	}
+func NewVivoClient(vi sdk.Vivo) (*client, error) {
 	if vi.AppId == "" {
 		return nil, errors.New("app id empty")
 	}
@@ -141,8 +140,16 @@ func (v *MessageRequest) Validate() error {
 	return nil
 }
 
+func (v *MessageRequest) GetRequestBody() ([]byte, error) {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
 func (v *MessageResponse) GetResult() string {
-	return v.Desc
+	return strconv.Itoa(v.Result)
 }
 
 func (v *MessageResponse) GetData() map[string]string {

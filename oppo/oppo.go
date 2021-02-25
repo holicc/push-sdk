@@ -2,7 +2,7 @@ package oppo
 
 import (
 	"context"
-	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -11,17 +11,11 @@ import (
 	"github.com/holicc/push-sdk/http"
 	"net/url"
 	"strconv"
-	"strings"
 	"time"
 )
 
 type MessageRequest struct {
-	Message   *SingleMessage `json:"message"`
-	AuthToken string         `json:"auth_token"`
-}
-
-type SingleMessage struct {
-	TargetType   int          `json:"target_type"`
+	TargetType   int16        `json:"target_type"`
 	TargetValue  string       `json:"target_value"`
 	Notification Notification `json:"notification"`
 }
@@ -53,8 +47,8 @@ type TokenResp struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 	Data    struct {
-		AuthToken  string    `json:"auth_token"`
-		CreateTime time.Time `json:"create_time"`
+		AuthToken  string `json:"auth_token"`
+		CreateTime int64  `json:"create_time"`
 	} `json:"data"`
 }
 
@@ -75,9 +69,6 @@ type client struct {
 }
 
 func NewOppoClient(op sdk.Oppo) (*client, error) {
-	if op.AppPkgName == "" {
-		return nil, errors.New("app pkg-name empty")
-	}
 	if op.AppKey == "" {
 		return nil, errors.New("app key empty")
 	}
@@ -102,22 +93,22 @@ func (o *client) Notify(ctx context.Context, req sdk.MessageRequest) (sdk.Messag
 		return nil, err
 	}
 
-	v := url.Values{}
-	data, err := json.Marshal(req)
-	if err != nil {
-		return nil, err
-	}
-	v.Add("message", string(data))
-
 	token, err := o.authClient.GetAuthToken(ctx)
 	if err != nil {
 		return nil, err
 	}
+	if token == "" {
+		return nil, errors.New("can not get token")
+	}
 
+	data, err := req.GetRequestBody()
+	if err != nil {
+		return nil, err
+	}
 	resp, err := o.httpclient.Do(ctx, &http.PushRequest{
 		Method: "POST",
 		URL:    o.op.PushURL,
-		Body:   []byte(v.Encode()),
+		Body:   data,
 		Header: []http.HTTPOption{
 			http.SetHeader("Content-Type", "application/x-www-form-urlencoded"),
 			http.SetHeader("auth_token", token),
@@ -141,25 +132,34 @@ func (o *client) Notify(ctx context.Context, req sdk.MessageRequest) (sdk.Messag
 }
 
 func (m *Response) GetResult() string {
-	return m.Message
+	return strconv.Itoa(m.Code)
 }
 
 func (m *Response) GetData() map[string]string {
 	return nil
 }
 
-func (o *MessageRequest) Validate() error {
+func (r *MessageRequest) Validate() error {
 	return nil
+}
+
+func (r *MessageRequest) GetRequestBody() ([]byte, error) {
+	data, err := json.Marshal(r)
+	if err != nil {
+		return nil, err
+	}
+	v := url.Values{}
+	v.Add("message", string(data))
+	return []byte(v.Encode()), nil
 }
 
 func (t *TokenInfo) TokenRequest() ([]byte, error) {
 	timestamp := strconv.FormatInt(time.Now().UTC().UnixNano()/(1e6), 10)
 
 	signStr := t.AppKey + timestamp + t.MasterSecret
-	signStr = strings.Trim(signStr, "")
-	hash := md5.New()
-	hash.Write([]byte(signStr))
-	sign := strings.ToLower(hex.EncodeToString(hash.Sum(nil)))
+	sha := sha256.New()
+	sha.Write([]byte(signStr))
+	sign := hex.EncodeToString(sha.Sum(nil))
 
 	req := map[string]string{
 		"app_key":   t.AppKey,
@@ -183,7 +183,7 @@ func (t *TokenInfo) ParseResponse(d []byte) error {
 
 	if token.Code == 0 {
 		t.Token = token.Data.AuthToken
-		t.CreateTime = token.Data.CreateTime
+		t.CreateTime = time.Unix(token.Data.CreateTime, 0)
 		return nil
 	}
 

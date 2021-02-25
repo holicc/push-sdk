@@ -7,7 +7,6 @@ import (
 	"fmt"
 	sdk "github.com/holicc/push-sdk"
 	"github.com/holicc/push-sdk/http"
-	"github.com/holicc/push-sdk/intent"
 	"net/url"
 	"strconv"
 )
@@ -16,9 +15,10 @@ type MessageRequest struct {
 	Payload               string            `json:"payload"`                 // 消息的内容。（注意：需要对payload字符串做urlencode处理）
 	RestrictedPackageName string            `json:"restricted_package_name"` // App的包名
 	PassThrough           int               `json:"pass_through"`            // 0 表示通知栏消息,1 表示透传消息
-	Title                 string            `json:"title"`                   // 通知栏展示的通知的标题
-	Description           string            `json:"description"`             // 通知栏展示的通知的描述
-	RegistrationId        string            `json:"registration_id"`         // 根据registration_id，发送消息到指定设备上
+	NotifyType            int               `json:"notify_type"`
+	Title                 string            `json:"title"`           // 通知栏展示的通知的标题
+	Description           string            `json:"description"`     // 通知栏展示的通知的描述
+	RegistrationId        string            `json:"registration_id"` // 根据registration_id，发送消息到指定设备上
 	Extra                 map[string]string `json:"extra"`
 }
 
@@ -97,7 +97,9 @@ func (p *MessageRequest) Validate() error {
 	if p.PassThrough != 0 && p.PassThrough != 1 {
 		return errors.New("unknown message pass type")
 	}
-
+	if p.NotifyType != -1 && p.NotifyType != 1 && p.NotifyType != 2 && p.NotifyType != 4 {
+		return errors.New("wrong notify type")
+	}
 	return nil
 }
 
@@ -107,10 +109,12 @@ func (p *MessageRequest) GetRequestBody() ([]byte, error) {
 		"restricted_package_name": pkgName,
 		"pass_through":            strconv.Itoa(p.PassThrough),
 		"title":                   p.Title,
+		"notify_type":             strconv.Itoa(p.NotifyType),
 		"description":             p.Description,
 		"registration_id":         p.RegistrationId,
-		"extra.notify_effect":     "2",
-		"extra.intent_uri":        intent.GenerateIntent(pkgName, p.Extra),
+	}
+	for k, v := range p.Extra {
+		messageMap[k] = v
 	}
 	data := url.Values{}
 	for key, value := range messageMap {
