@@ -24,6 +24,7 @@ type Notification struct {
 	Title             string `json:"title"`
 	SubTitle          string `json:"sub_title"`
 	Content           string `json:"content"`
+	ActionParams      string `json:"action_parameters"`
 	ClickActionType   int    `json:"click_action_type"`
 	ClickActionUrl    string `json:"click_action_url"`
 	CallBackUrl       string `json:"call_back_url"`
