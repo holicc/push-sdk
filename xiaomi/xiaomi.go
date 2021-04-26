@@ -16,6 +16,7 @@ type MessageRequest struct {
 	RestrictedPackageName string            `json:"restricted_package_name"` // App的包名
 	PassThrough           int               `json:"pass_through"`            // 0 表示通知栏消息,1 表示透传消息
 	NotifyType            int               `json:"notify_type"`
+	Expire                int64             `json:"time_to_live"`
 	Title                 string            `json:"title"`           // 通知栏展示的通知的标题
 	Description           string            `json:"description"`     // 通知栏展示的通知的描述
 	RegistrationId        string            `json:"registration_id"` // 根据registration_id，发送消息到指定设备上
@@ -90,9 +91,6 @@ func (p *MessageRequest) Validate() error {
 	}
 	if p.RegistrationId == "" {
 		return errors.New("message registration id is empty")
-	}
-	if p.Payload == "" {
-		return errors.New("message playload is empty")
 	}
 	if p.PassThrough != 0 && p.PassThrough != 1 {
 		return errors.New("unknown message pass type")

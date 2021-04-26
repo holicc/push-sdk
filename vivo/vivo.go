@@ -18,6 +18,7 @@ type MessageRequest struct {
 	RegId           string                 `json:"regId"`
 	Title           string                 `json:"title"`
 	Content         string                 `json:"content"`
+	Expire          int64                  `json:"timeToLive"`
 	SkipType        int                    `json:"skipType"`
 	SkipContent     string                 `json:"skipContent"`
 	RequestId       string                 `json:"requestId"`
